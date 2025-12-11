@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - notification-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  api-gateway:
+    build: ./api_gateway
+    container_name: api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: admin123
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+  email-consumer:
+    build: ./consumers
+    container_name: email-consumer
+    command: python email_consumer.py
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: admin123
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+  admin-consumer:
+    build: ./consumers
+    container_name: admin-consumer
+    command: python admin_consumer.py
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: admin123
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+  pedidos-consumer:
+    build: ./consumers
+    container_name: pedidos-consumer
+    command: python pedidos_consumer.py
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: admin123
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  notification-network:
+    driver: bridge
